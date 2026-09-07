@@ -28,16 +28,20 @@ import io.javalin.websocket.WsContext;
 public class SnerdQueue {
     private String binaryPath;
     private String storagePath;
+    private Integer shards;
+    private Integer maxLocalShards;
+    private Integer maxWorkers;
     private final Map<String, Consumer<String>> handlers = new ConcurrentHashMap<>();
     private final Map<String, Consumer<String>> maxRetryHandlers = new ConcurrentHashMap<>();
     private static final ThreadLocal<String> currentTaskId = new ThreadLocal<>();
     private final Set<WsContext> wsClients = ConcurrentHashMap.newKeySet();
+    private volatile List<String> ownedShards = new ArrayList<>();
 
-    
+
     private Process process;
     private BufferedWriter writer;
     private BufferedReader reader;
-    
+
     private ExecutorService stdoutReaderPool;
     private ExecutorService jobExecutionPool;
     private volatile boolean isShuttingDown = false;
@@ -52,8 +56,15 @@ public class SnerdQueue {
     }
 
     public SnerdQueue(String binaryPath, String storagePath) throws IOException, InterruptedException {
+        this(binaryPath, storagePath, null, null, null);
+    }
+
+    public SnerdQueue(String binaryPath, String storagePath, Integer shards, Integer maxLocalShards, Integer maxWorkers) throws IOException, InterruptedException {
         this.binaryPath = binaryPath;
         this.storagePath = storagePath;
+        this.shards = shards;
+        this.maxLocalShards = maxLocalShards;
+        this.maxWorkers = maxWorkers;
 
         if (this.binaryPath == null) {
             this.binaryPath = SnerdmqInstaller.ensureDownloaded();
@@ -83,11 +94,16 @@ public class SnerdQueue {
         }
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
+        // Pass sharding options as environment variables.
+        Map<String, String> env = pb.environment();
+        if (shards != null)         env.put("SNERD_SHARDS",       String.valueOf(shards));
+        if (maxLocalShards != null) env.put("SNERD_MAX_SHARDS",   String.valueOf(maxLocalShards));
+        if (maxWorkers != null)     env.put("SNERD_MAX_WORKERS",  String.valueOf(maxWorkers));
         this.process = pb.start();
 
         this.writer = new BufferedWriter(new OutputStreamWriter(process.getOutputStream()));
         this.reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-        
+
         // Background thread to constantly read standard output from Rust
         this.stdoutReaderPool = Executors.newSingleThreadExecutor();
         // Background thread pool to execute the user's jobs concurrently
@@ -96,7 +112,10 @@ public class SnerdQueue {
         this.stdoutReaderPool.submit(() -> {
             try {
                 String line;
-                while (!isShuttingDown && (line = reader.readLine()) != null) {
+                // Keep reading even while shutting down — drain cooperation
+                // requires us to keep processing execute responses until the
+                // daemon closes its stdout pipe.
+                while ((line = reader.readLine()) != null) {
                     handleLine(line.trim());
                 }
             } catch (IOException e) {
@@ -179,13 +198,32 @@ public class SnerdQueue {
 
     public void shutdown() {
         this.isShuttingDown = true;
-        
-        if (stdoutReaderPool != null) stdoutReaderPool.shutdownNow();
-        if (jobExecutionPool != null) jobExecutionPool.shutdown();
 
         if (process != null && process.isAlive()) {
+            // SIGTERM triggers the daemon's graceful drain sequence.
             process.destroy();
         }
+
+        // Wait up to 35s for the daemon to exit after drain completes.
+        if (process != null) {
+            try {
+                boolean exited = process.waitFor(35, java.util.concurrent.TimeUnit.SECONDS);
+                if (!exited) {
+                    process.destroyForcibly();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                process.destroyForcibly();
+            }
+        }
+
+        if (stdoutReaderPool != null) stdoutReaderPool.shutdown();
+        if (jobExecutionPool != null) jobExecutionPool.shutdown();
+    }
+
+    /** Returns the shard keys owned by this instance (from the last membership event). */
+    public List<String> getOwnedShards() {
+        return Collections.unmodifiableList(ownedShards);
     }
 
     private synchronized void sendMessage(String json) {
@@ -264,6 +302,18 @@ public class SnerdQueue {
             } else {
                 System.err.println("[Snerd] Error from engine: " + message);
             }
+        } else if (action.equals("membership")) {
+            // Informational only — daemon owns all routing.
+            // Parse the "owned" array from the raw JSON line.
+            List<String> owned = new ArrayList<>();
+            java.util.regex.Matcher m = Pattern.compile("\"([^\"]+)\"").matcher(
+                line.replaceAll(".*\"owned\"\\s*:\\s*\\[", "").replaceAll("\\].*", ""));
+            while (m.find()) owned.add(m.group(1));
+            this.ownedShards = owned;
+            System.err.println("[Snerd] Cluster: queue=" + extractJsonField(line, "queue")
+                + " shards=" + extractJsonNumberField(line, "shards")
+                + " owned=" + owned
+                + " version=" + extractJsonNumberField(line, "version"));
         } else if (action.equals("progress")) {
             for (WsContext ctx : wsClients) {
                 if (ctx.session.isOpen()) {
