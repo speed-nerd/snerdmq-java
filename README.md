@@ -1,6 +1,6 @@
 <div align="center">
   <img src="./assets/Designer-9.png" height="120" alt="SnerdMQ Java Logo" />
-  <h1>☕ SnerdMQ Java & Kotlin SDK v1.0.5</h1>
+  <h1>☕ SnerdMQ Java & Kotlin SDK v1.0.6</h1>
   <p>A zero-config, C-speed background job queue for the JVM. Ditch Redis and heavy queue workers for a simple, embedded Rust daemon.</p>
 
   [![Docs](https://img.shields.io/badge/docs-speed--nerd.github.io-blue)](https://speed-nerd.github.io/docs/)
@@ -8,7 +8,7 @@
 
 This is the official JVM SDK wrapper for **SnerdMQ**. It handles all JSON-RPC communication and `ProcessBuilder` orchestration so you can write lightning-fast background jobs in Java, Kotlin, or Scala without managing any external databases like Redis or ActiveMQ.
 
-## ✨ v1.0.5 AI Features
+## ✨ v1.0.6 AI Features
 - **Smart API Rate-Limiting**: Natively tracks `rateLimitGroup` execution velocity to prevent 429 "Too Many Requests" API errors.
 - **Payload-Hashing Deduplication**: Automatically computes cryptographic hashes to drop duplicate tasks instantly.
 - **Dynamic Float Prioritization**: A native Binary Max-Heap bypasses standard FIFO rules for high urgency tasks.
@@ -17,7 +17,7 @@ This is the official JVM SDK wrapper for **SnerdMQ**. It handles all JSON-RPC co
 - **Zero Rust Required**: Our built-in `SnerdmqInstaller` class automatically downloads the pre-compiled C-speed Rust binary for your OS.
 - **Thread-Safe**: Built on top of native Java `ExecutorService` and `ProcessBuilder`, it is heavily optimized for massively concurrent enterprise workloads.
 
-### ⚙️ Advanced Task Configuration (v1.0.5)
+### ⚙️ Advanced Task Configuration (v1.0.6)
 To power complex AI workflows, tasks can now be configured with advanced orchestration parameters:
 
 * **`autoDedupe` (`Boolean`)**: If set to `true`, the daemon computes a cryptographic hash of the `taskType` and `data`. If an identical payload is currently sitting in the queue pending execution, this new task is silently dropped. Excellent for preventing duplicate generative AI requests from trigger-happy users!
@@ -52,7 +52,7 @@ This package is designed to work flawlessly in both modern Gradle projects and l
 Add the dependency to your `build.gradle`:
 ```groovy
 dependencies {
-    implementation 'io.github.speed-nerd:snerdmq:1.0.5'
+    implementation 'io.github.speed-nerd:snerdmq:1.0.6'
 }
 ```
 
@@ -62,7 +62,7 @@ Add the dependency to your `pom.xml`:
 <dependency>
     <groupId>io.github.speed-nerd</groupId>
     <artifactId>snerdmq</artifactId>
-    <version>1.0.5</version>
+    <version>1.0.6</version>
 </dependency>
 ```
 
@@ -267,3 +267,41 @@ SnerdQueue queue = new SnerdQueue(null, "/var/data/snerd"); // per-server storag
 A shared network drive (AWS EFS or NFS) is still a good home for that storage when a single instance needs durable state — e.g. a container that restarts but must keep its queue. Native OS file locking (`flock`) keeps writes safe — no Redis required.
 
 *Built with ❤️ for John Wick tier engineering.*
+
+
+## Architecture Best Practices
+
+When building production applications with SnerdMQ, it is recommended to initialize the queue as a Singleton, isolate your domain workers into separate files/functions, use Dead Letter Queues (DLQ) for failed tasks via `RegisterMaxRetryHandler`, and ensure manual graceful shutdown. The embedded Dashboard UI can also be easily served from the same instance.
+
+```java
+import com.snerdmq.SnerdQueue;
+
+public class App {
+    public static void main(String[] args) throws Exception {
+        SnerdQueue queue = new SnerdQueue("./.snerdata", null, 1);
+
+        // Email Workers
+        queue.registerHandler("send_email", data -> {
+            System.out.println("Sending email to " + data.get("email") + "...");
+        });
+
+        queue.registerMaxRetryHandler("send_email", data -> {
+            System.out.println("Email to " + data.get("email") + " failed permanently. Dead letter processing...");
+        });
+
+        // Image Workers
+        queue.registerHandler("process_image", data -> {
+            System.out.println("Processing image " + data.get("imageId") + "...");
+        });
+
+        queue.startDashboard(8080);
+
+        // Graceful shutdown
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            queue.shutdown();
+        }));
+
+        queue.startListening();
+    }
+}
+```
