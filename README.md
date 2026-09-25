@@ -12,6 +12,7 @@ This is the official JVM SDK wrapper for **SnerdMQ**. It handles all JSON-RPC co
 - **Smart API Rate-Limiting**: Natively tracks `rateLimitGroup` execution velocity to prevent 429 "Too Many Requests" API errors.
 - **Payload-Hashing Deduplication**: Automatically computes cryptographic hashes to drop duplicate tasks instantly.
 - **Dynamic Float Prioritization**: A native Binary Max-Heap bypasses standard FIFO rules for high urgency tasks.
+- **Job Chaining (DAGs)**: Define complex workflow dependencies natively. Tasks wait in a blocked state until their parent tasks succeed.
 - **Progress Streaming & Live Dashboard**: Handlers can stream progress updates to a built-in React UI dashboard served by the SDK.
 - **Ditch Redis**: Gives your Spring Boot or Ktor apps persistent state, automatic retries, and dead-letter queues right out of the box with zero external infrastructure.
 - **Zero Rust Required**: Our built-in `SnerdmqInstaller` class automatically downloads the pre-compiled C-speed Rust binary for your OS.
@@ -29,6 +30,7 @@ To power complex AI workflows, tasks can now be configured with advanced orchest
 * **`cron` (`String`)**: A cron expression (e.g. `"0 * * * *"`) for recurring jobs. Shorthands like `"2h"` or `"10m"` are also supported.
 * **`webhookUrl` (`String`)**: By providing a webhook URL, SnerdMQ will completely bypass your local Java handlers and dispatch the task payload via an HTTP POST request directly to the specified URL.
 * **`maxExecutionSeconds` (`Integer`)**: Optional hard timeout in seconds. If execution takes longer, it's marked as failed.
+* **`triggerAfterIds` (`List<String>`)**: A list of parent task IDs that must complete successfully before this task is allowed to dispatch. Enables complex DAG workflows natively within the queue.
 
 ### Note on Hard Timeouts (`maxExecutionSeconds`)
 When `maxExecutionSeconds` is provided, the Java SDK executes your handler using `CompletableFuture.orTimeout()`. If the task takes longer than the timeout, a `TimeoutException` is caught and the execution will be marked as failed. The background Rust daemon also enforces this timeout at the IPC level.
