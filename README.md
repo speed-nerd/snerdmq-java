@@ -316,6 +316,39 @@ queue.enqueue(
 ```
 
 
+### 🕒 Cron & Scheduled Jobs
+```java
+// Run every day at 08:00
+queue.enqueue(
+    "daily-digest", "send_email", "{ \"template\": \"daily\" }",
+    3, 0.0, null, null, 0.0, 
+    "0 8 * * *", // cron
+    null, null, null, null
+);
+```
+
+### 🛑 Hard Timeouts
+```java
+// Forcefully kill if running > 5 mins
+queue.enqueue(
+    "risky-task", "process_data", "{}",
+    3, 0.0, null, null, 0.0, null, null, 
+    300, // max_execution_seconds
+    null, null
+);
+```
+
+### 🌐 Webhook Callbacks
+```java
+// Execute via HTTP instead of local handlers
+queue.enqueue(
+    "serverless-task", "resize_image", "{ \"img\": \"cat.jpg\" }",
+    3, 0.0, null, null, 0.0, null, 
+    "https://api.example.com/webhooks/snerdmq", // webhook_url
+    null, null, null
+);
+```
+
 *Built with ❤️ for John Wick tier engineering.*
 
 
