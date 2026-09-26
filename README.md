@@ -1,6 +1,6 @@
 <div align="center">
   <img src="./assets/Designer-9.png" height="120" alt="SnerdMQ Java Logo" />
-  <h1>☕ SnerdMQ Java & Kotlin SDK v1.0.6</h1>
+  <h1>☕ SnerdMQ Java & Kotlin SDK v1.1.0</h1>
   <p>A zero-config, C-speed background job queue for the JVM. Ditch Redis and heavy queue workers for a simple, embedded Rust daemon.</p>
 
   [![Docs](https://img.shields.io/badge/docs-speed--nerd.github.io-blue)](https://speed-nerd.github.io/docs/)
@@ -8,7 +8,9 @@
 
 This is the official JVM SDK wrapper for **SnerdMQ**. It handles all JSON-RPC communication and `ProcessBuilder` orchestration so you can write lightning-fast background jobs in Java, Kotlin, or Scala without managing any external databases like Redis or ActiveMQ.
 
-## ✨ v1.0.6 AI Features
+## ✨ v1.1.0 AI Features
+- **Worker Pools**: Prevent slow generative AI tasks from starving fast DB tasks by dedicating workers to specific pools (e.g. `"urgent"`).
+- **Sharded Queues**: Distribute load across multiple queue nodes safely using file-backed lock sharding (`maxLocalShards`).
 - **Smart API Rate-Limiting**: Natively tracks `rateLimitGroup` execution velocity to prevent 429 "Too Many Requests" API errors.
 - **Payload-Hashing Deduplication**: Automatically computes cryptographic hashes to drop duplicate tasks instantly.
 - **Dynamic Float Prioritization**: A native Binary Max-Heap bypasses standard FIFO rules for high urgency tasks.
@@ -18,7 +20,7 @@ This is the official JVM SDK wrapper for **SnerdMQ**. It handles all JSON-RPC co
 - **Zero Rust Required**: Our built-in `SnerdmqInstaller` class automatically downloads the pre-compiled C-speed Rust binary for your OS.
 - **Thread-Safe**: Built on top of native Java `ExecutorService` and `ProcessBuilder`, it is heavily optimized for massively concurrent enterprise workloads.
 
-### ⚙️ Advanced Task Configuration (v1.0.6)
+### ⚙️ Advanced Task Configuration (v1.1.0)
 To power complex AI workflows, tasks can now be configured with advanced orchestration parameters:
 
 * **`autoDedupe` (`Boolean`)**: If set to `true`, the daemon computes a cryptographic hash of the `taskType` and `data`. If an identical payload is currently sitting in the queue pending execution, this new task is silently dropped. Excellent for preventing duplicate generative AI requests from trigger-happy users!
@@ -31,6 +33,7 @@ To power complex AI workflows, tasks can now be configured with advanced orchest
 * **`webhookUrl` (`String`)**: By providing a webhook URL, SnerdMQ will completely bypass your local Java handlers and dispatch the task payload via an HTTP POST request directly to the specified URL.
 * **`maxExecutionSeconds` (`Integer`)**: Optional hard timeout in seconds. If execution takes longer, it's marked as failed.
 * **`triggerAfterIds` (`List<String>`)**: A list of parent task IDs that must complete successfully before this task is allowed to dispatch. Enables complex DAG workflows natively within the queue.
+* **`pool` (`String`)**: Dedicate this task to a specific worker pool (e.g. `"urgent"`).
 
 ### Note on Hard Timeouts (`maxExecutionSeconds`)
 When `maxExecutionSeconds` is provided, the Java SDK executes your handler using `CompletableFuture.orTimeout()`. If the task takes longer than the timeout, a `TimeoutException` is caught and the execution will be marked as failed. The background Rust daemon also enforces this timeout at the IPC level.
@@ -54,7 +57,7 @@ This package is designed to work flawlessly in both modern Gradle projects and l
 Add the dependency to your `build.gradle`:
 ```groovy
 dependencies {
-    implementation 'io.github.speed-nerd:snerdmq:1.0.6'
+    implementation 'io.github.speed-nerd:snerdmq:1.1.0'
 }
 ```
 
@@ -64,7 +67,7 @@ Add the dependency to your `pom.xml`:
 <dependency>
     <groupId>io.github.speed-nerd</groupId>
     <artifactId>snerdmq</artifactId>
-    <version>1.0.6</version>
+    <version>1.1.0</version>
 </dependency>
 ```
 
@@ -110,7 +113,9 @@ public class App {
             null,           // executeAt
             null,           // cron
             null,           // webhookUrl
-            null            // maxExecutionSeconds
+            null,           // maxExecutionSeconds
+            null,           // triggerAfterIds
+            null            // pool
         );
 
         // 6. Need scheduling, deduplication, or serverless execution? All
@@ -128,7 +133,9 @@ public class App {
             null,
             "0 8 * * *",    // cron: run every day at 08:00
             "https://api.example.com/webhook", // Execute via HTTP instead of local handlers
-            300             // maxExecutionSeconds: hard timeout
+            300,            // maxExecutionSeconds: hard timeout
+            java.util.Arrays.asList("parent-123"), // triggerAfterIds: Wait for parent tasks to complete
+            "urgent"        // pool: Dedicate to a specific worker pool
         );
         
         // Let the application run
@@ -243,7 +250,7 @@ SnerdQueue second = new SnerdQueue(); // ❌ daemon refuses to start:
 // "Another daemon is already running on storage '.snerdata'"
 ```
 
-This applies across processes too — multiple JVM services on the same machine each spawn their own daemon, so each needs its own `storagePath`.
+This applies across processes too — multiple JVM services on the same machine each spawn their own daemon, so each needs its own `storagePath`. To safely scale on the same disk without double-executing jobs, you must initialize the daemon with `maxLocalShards`.
 
 ### 🔀 Need multiple queues? Give each one its own storage
 
