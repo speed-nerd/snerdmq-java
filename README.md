@@ -298,62 +298,38 @@ Simply pass an array of parent task IDs to the `trigger_after_ids` parameter whe
 
 ### 🍕 Sharded Queues (Scaling Out)
 
-SnerdMQ natively supports distributed execution across multiple servers while acting as a single logical queue. Just mount a shared storage drive (like AWS EFS) and boot multiple daemons. They will automatically lock and negotiate ownership of shards. No config required in the SDK for enqueueing! Just tell the daemon how many shards to claim on boot:
-
-```java
-// Boot a multi-tenant daemon that owns up to 4 shards locally
-SnerdQueue queue = new SnerdQueue(null, 4); // maxLocalShards
-```
+SnerdMQ natively supports distributed execution across multiple servers while acting as a single logical queue. Just mount a shared storage drive (like AWS EFS) and boot multiple daemons. They will automatically lock and negotiate ownership of shards. No config required in the SDK for enqueueing! Just tell the daemon how many shards to claim on boot.
 
 ```java
 // 1. Worker Pools: Route tasks to the 'urgent' pool
 queue.enqueue(
     "payment-job", "process_payment", "{ \"amount\": 100 }",
-    3, 0.0, null, null, 0.0, null, null, null,
-    "urgent", // pool
-    null
+    3, 0.0, null, null, null, null, null, null, null, null, "urgent", null
 );
 
 // 2. Job Chaining: Block execution until parents succeed
 queue.enqueue(
     "final-job", "send_report", "{ \"id\": 1 }",
-    3, 0.0, null, null, 0.0, null, null, null, null,
-    Arrays.asList("parent-job-1", "parent-job-2") // trigger_after_ids
+    3, 0.0, null, null, null, null, null, null, null, null, null, Arrays.asList("parent-job-1", "parent-job-2")
 );
 ```
-
 
 ### 🕒 Cron & Scheduled Jobs
 ```java
 // Run every day at 08:00
-queue.enqueue(
-    "daily-digest", "send_email", "{ \"template\": \"daily\" }",
-    3, 0.0, null, null, 0.0, 
-    "0 8 * * *", // cron
-    null, null, null, null
-);
+queue.enqueue("daily-digest", "send_email", "{ \"template\": \"daily\" }", 3, 0.0, null, null, null, null, null, "0 8 * * *", null, null, null, null);
 ```
 
 ### 🛑 Hard Timeouts
 ```java
 // Forcefully kill if running > 5 mins
-queue.enqueue(
-    "risky-task", "process_data", "{}",
-    3, 0.0, null, null, 0.0, null, null, 
-    300, // max_execution_seconds
-    null, null
-);
+queue.enqueue("risky-task", "process_data", "{}", 3, 0.0, null, null, null, null, null, null, null, 300, null, null);
 ```
 
 ### 🌐 Webhook Callbacks
 ```java
 // Execute via HTTP instead of local handlers
-queue.enqueue(
-    "serverless-task", "resize_image", "{ \"img\": \"cat.jpg\" }",
-    3, 0.0, null, null, 0.0, null, 
-    "https://api.example.com/webhooks/snerdmq", // webhook_url
-    null, null, null
-);
+queue.enqueue("serverless-task", "resize_image", "{ \"img\": \"cat.jpg\" }", 3, 0.0, null, null, null, null, null, null, "https://api.example.com/webhooks/snerdmq", null, null, null);
 ```
 
 *Built with ❤️ for John Wick tier engineering.*
