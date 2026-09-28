@@ -1,6 +1,6 @@
 <div align="center">
   <img src="./assets/Designer-9.png" height="120" alt="SnerdMQ Java Logo" />
-  <h1>☕ SnerdMQ Java & Kotlin SDK v1.1.1</h1>
+  <h1>☕ SnerdMQ Java & Kotlin SDK v1.1.2</h1>
   <p>A zero-config, C-speed background job queue for the JVM. Ditch Redis and heavy queue workers for a simple, embedded Rust daemon.</p>
 
   [![Docs](https://img.shields.io/badge/docs-speed--nerd.github.io-blue)](https://speed-nerd.github.io/docs/sdks/java/)
@@ -10,7 +10,7 @@ This is the official JVM SDK wrapper for **SnerdMQ**. It handles all JSON-RPC co
 
 > 📚 **Full Documentation & Advanced Features:** Check out the [official Java SDK documentation](https://speed-nerd.github.io/docs/sdks/java/) on our docs site!
 
-## ✨ v1.1.1 AI Features
+## ✨ v1.1.2 AI Features
 - **Worker Pools**: Prevent slow generative AI tasks from starving fast DB tasks by dedicating workers to specific pools (e.g. `"urgent"`).
 - **Sharded Queues**: Distribute load across multiple queue nodes safely using file-backed lock sharding (`maxLocalShards`).
 - **Smart API Rate-Limiting**: Natively tracks `rateLimitGroup` execution velocity to prevent 429 "Too Many Requests" API errors.
@@ -22,7 +22,7 @@ This is the official JVM SDK wrapper for **SnerdMQ**. It handles all JSON-RPC co
 - **Zero Rust Required**: Our built-in `SnerdmqInstaller` class automatically downloads the pre-compiled C-speed Rust binary for your OS.
 - **Thread-Safe**: Built on top of native Java `ExecutorService` and `ProcessBuilder`, it is heavily optimized for massively concurrent enterprise workloads.
 
-### ⚙️ Advanced Task Configuration (v1.1.1)
+### ⚙️ Advanced Task Configuration (v1.1.2)
 To power complex AI workflows, tasks can now be configured with advanced orchestration parameters:
 
 * **`autoDedupe` (`Boolean`)**: If set to `true`, the daemon computes a cryptographic hash of the `taskType` and `data`. If an identical payload is currently sitting in the queue pending execution, this new task is silently dropped. Excellent for preventing duplicate generative AI requests from trigger-happy users!
@@ -59,7 +59,7 @@ This package is designed to work flawlessly in both modern Gradle projects and l
 Add the dependency to your `build.gradle`:
 ```groovy
 dependencies {
-    implementation 'io.github.speed-nerd:snerdmq:1.1.1'
+    implementation 'io.github.speed-nerd:snerdmq:1.1.2'
 }
 ```
 
@@ -69,7 +69,7 @@ Add the dependency to your `pom.xml`:
 <dependency>
     <groupId>io.github.speed-nerd</groupId>
     <artifactId>snerdmq</artifactId>
-    <version>1.1.1</version>
+    <version>1.1.2</version>
 </dependency>
 ```
 
@@ -332,7 +332,7 @@ queue.enqueue("risky-task", "process_data", "{}", 3, 0.0, null, null, null, null
 queue.enqueue("serverless-task", "resize_image", "{ \"img\": \"cat.jpg\" }", 3, 0.0, null, null, null, null, null, null, "https://api.example.com/webhooks/snerdmq", null, null, null);
 ```
 
-*Built with ❤️ for John Wick tier engineering.*
+
 
 
 ## Architecture Best Practices
@@ -371,3 +371,4 @@ public class App {
     }
 }
 ```
+*Built with ❤️ for John Wick tier engineering.*
